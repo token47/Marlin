@@ -557,7 +557,7 @@ class Temperature {
 
       typedef enum TRState { TRInactive, TRFirstHeating, TRStable, TRRunaway } TRstate;
 
-      static void thermal_runaway_protection(TRState* state, millis_t* timer, float temperature, float target_temperature, int heater_id, int period_seconds, int hysteresis_degc);
+      static void thermal_runaway_protection(TRState* state, millis_t* timer, float temperature, float target_temperature, int heater_id, int period_seconds, int hysteresis_degc, int hysteresis_beep_degc);
 
       #if ENABLED(THERMAL_PROTECTION_HOTENDS)
         static TRState thermal_runaway_state_machine[HOTENDS];

@@ -31,6 +31,10 @@
 #include "planner.h"
 #include "language.h"
 
+#if HAS_BUZZER && DISABLED(LCD_USE_I2C_BUZZER)
+  #include "buzzer.h"
+#endif
+
 #if ENABLED(HEATER_0_USES_MAX6675)
   #include "spi.h"
 #endif
@@ -733,7 +737,7 @@ void Temperature::manage_heater() {
 
     #if ENABLED(THERMAL_PROTECTION_HOTENDS)
       // Check for thermal runaway
-      thermal_runaway_protection(&thermal_runaway_state_machine[e], &thermal_runaway_timer[e], current_temperature[e], target_temperature[e], e, THERMAL_PROTECTION_PERIOD, THERMAL_PROTECTION_HYSTERESIS);
+      thermal_runaway_protection(&thermal_runaway_state_machine[e], &thermal_runaway_timer[e], current_temperature[e], target_temperature[e], e, THERMAL_PROTECTION_PERIOD, THERMAL_PROTECTION_HYSTERESIS, THERMAL_PROTECTION_HYSTERESIS_BEEP);
     #endif
 
     soft_pwm_amount[e] = (current_temperature[e] > minttemp[e] || is_preheating(e)) && current_temperature[e] < maxttemp[e] ? (int)get_pid_output(e) >> 1 : 0;
@@ -800,7 +804,7 @@ void Temperature::manage_heater() {
     #endif
 
     #if HAS_THERMALLY_PROTECTED_BED
-      thermal_runaway_protection(&thermal_runaway_bed_state_machine, &thermal_runaway_bed_timer, current_temperature_bed, target_temperature_bed, -1, THERMAL_PROTECTION_BED_PERIOD, THERMAL_PROTECTION_BED_HYSTERESIS);
+      thermal_runaway_protection(&thermal_runaway_bed_state_machine, &thermal_runaway_bed_timer, current_temperature_bed, target_temperature_bed, -1, THERMAL_PROTECTION_BED_PERIOD, THERMAL_PROTECTION_BED_HYSTERESIS, THERMAL_PROTECTION_BED_HYSTERESIS_BEEP);
     #endif
 
     #if HEATER_IDLE_HANDLER
@@ -1274,9 +1278,10 @@ void Temperature::init() {
     millis_t Temperature::thermal_runaway_bed_timer;
   #endif
 
-  void Temperature::thermal_runaway_protection(Temperature::TRState* state, millis_t* timer, float current, float target, int heater_id, int period_seconds, int hysteresis_degc) {
+  void Temperature::thermal_runaway_protection(Temperature::TRState* state, millis_t* timer, float current, float target, int heater_id, int period_seconds, int hysteresis_degc, int hysteresis_beep_degc) {
 
     static float tr_target_temperature[HOTENDS + 1] = { 0.0 };
+    static millis_t next_buzz = 0;
 
     /**
         SERIAL_ECHO_START();
@@ -1326,6 +1331,17 @@ void Temperature::init() {
       case TRStable:
         if (current >= tr_target_temperature[heater_index] - hysteresis_degc) {
           *timer = millis() + period_seconds * 1000UL;
+          #if HAS_BUZZER
+            if (hysteresis_beep_degc > 0) {
+                const millis_t ms = millis();
+                if (ELAPSED(ms, next_buzz)) {
+		            if (current <= tr_target_temperature[heater_index] - hysteresis_beep_degc) {
+		                next_buzz = ms + 2000;
+                        buzzer.tone(200, 2500);
+		            }
+		        }
+			}
+          #endif
           break;
         }
         else if (PENDING(millis(), *timer)) break;
